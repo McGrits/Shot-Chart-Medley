@@ -1,0 +1,9 @@
+streamlit
+pandas
+numpy
+matplotlib
+requests
+Pillow
+scikit-learn
+nba_api
+nba_on_court
