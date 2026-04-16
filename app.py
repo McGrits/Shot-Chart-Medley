@@ -18,26 +18,6 @@ import nba_api.stats.endpoints.playergamelog as game_logs
 from nba_api.stats.endpoints import leagueleaders
 import nba_on_court as noc
 
-import requests
-from requests.adapters import HTTPAdapter
-from urllib3.util.retry import Retry
-
-def get_robust_session():
-    session = requests.Session()
-    retry = Retry(
-        total=5, # Try 5 times
-        backoff_factor=1, # Wait 1s, 2s, 4s, 8s, 16s between tries
-        status_forcelist=[429, 500, 502, 503, 504],
-    )
-    adapter = HTTPAdapter(max_retries=retry)
-    session.mount("http://", adapter)
-    session.mount("https://", adapter)
-    return session
-
-# Apply this to the NBA API
-from nba_api.library.http import NBAStatsHTTP
-NBAStatsHTTP.default_timeout = 60 # Push to 60 seconds
-
 # --- INITIALIZATION & CACHING ---
 st.set_page_config(page_title="NBA Shot Chart Medley", layout="wide")
 
