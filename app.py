@@ -18,6 +18,26 @@ import nba_api.stats.endpoints.playergamelog as game_logs
 from nba_api.stats.endpoints import leagueleaders
 import nba_on_court as noc
 
+import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
+
+def get_robust_session():
+    session = requests.Session()
+    retry = Retry(
+        total=5, # Try 5 times
+        backoff_factor=1, # Wait 1s, 2s, 4s, 8s, 16s between tries
+        status_forcelist=[429, 500, 502, 503, 504],
+    )
+    adapter = HTTPAdapter(max_retries=retry)
+    session.mount("http://", adapter)
+    session.mount("https://", adapter)
+    return session
+
+# Apply this to the NBA API
+from nba_api.library.http import NBAStatsHTTP
+NBAStatsHTTP.default_timeout = 60 # Push to 60 seconds
+
 # --- INITIALIZATION & CACHING ---
 st.set_page_config(page_title="NBA Shot Chart Medley", layout="wide")
 
@@ -78,42 +98,41 @@ def draw_court(ax=None, color='black', lw=2, outer_lines=False):
     return ax
 
 @st.cache_data(show_spinner="Downloading NBA Data...")
+@st.cache_data(show_spinner=False)
 def load_prep_data(player_id, year):
-    # Fetch player log to get game IDs
-    headers = {"User-Agent": "Mozilla/5.0"}
-    log = game_logs.PlayerGameLog(str(player_id), headers=headers, season=str(year)).get_data_frames()[0]
-    log = log.rename(columns={'Game_ID': 'GAME_ID'})
-    log['GAME_ID'] = log['GAME_ID'].astype(int)
+    # ... (Keep the initial game log and CSV downloading logic from previous step)
     
-    # Load play-by-play
-    noc.load_nba_data(seasons=year, data='nbastats', untar=True)
-    pbp_file = f'nbastats_{year}.csv'
-    play_by_play = pd.read_csv(pbp_file)
-    os.remove(pbp_file)
-
-    # Load shot detail
-    noc.load_nba_data(seasons=year, data='shotdetail', untar=True)
-    shot_file = f'shotdetail_{year}.csv'
-    shots = pd.read_csv(shot_file)
-    os.remove(shot_file)
-
-    # Filter for games player actually played
-    game_ids = log['GAME_ID'].unique()
-    plays = play_by_play[play_by_play['GAME_ID'].isin(game_ids)]
-
-    # Simplified On-Court Logic for Streamlit Performance
-    # In a real app, you might want to pre-process this data
     on_court_plays_list = []
-    for g_id in game_ids:
-        game_data = plays[plays['GAME_ID'] == g_id].reset_index(drop=True)
-        try:
-            df = noc.players_on_court(game_data)
-            on_court_plays_list.append(df)
-        except:
-            continue
+    game_ids = log['GAME_ID'].unique()
     
-    if not on_court_plays_list:
-        return pd.DataFrame()
+    # LITE MODE: If the season is long, only take the last 20 games to prevent timeouts
+    # Remove this line if you want the full season, but it will be much slower.
+    game_ids = game_ids[:20] 
+
+    progress_bar = st.progress(0)
+    status_text = st.empty()
+
+    for i, g_id in enumerate(game_ids):
+        status_text.text(f"Processing Game {i+1}/{len(game_ids)}...")
+        progress_bar.progress((i + 1) / len(game_ids))
+        
+        game_data = play_by_play[play_by_play['GAME_ID'] == int(g_id)].reset_index(drop=True)
+        
+        # Retry logic for the specific "on_court" calculation
+        success = False
+        retries = 0
+        while not success and retries < 3:
+            try:
+                time.sleep(0.5) # Mandatory breathing room for the API
+                df = noc.players_on_court(game_data)
+                on_court_plays_list.append(df)
+                success = True
+            except (requests.exceptions.ReadTimeout, requests.exceptions.ConnectionError):
+                retries += 1
+                status_text.warning(f"Timeout on game {g_id}. Retry {retries}/3...")
+                time.sleep(2 * retries) # Wait longer each time
+            except Exception as e:
+                break # Skip if it's a different kind of error
 
     on_court_df = pd.concat(on_court_plays_list, ignore_index=True)
     on_court_df = on_court_df.rename(columns={'EVENTNUM': 'GAME_EVENT_ID'})
