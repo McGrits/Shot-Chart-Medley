@@ -26,12 +26,25 @@ if not hasattr(np, "in1d"):
     np.in1d = np.isin
 
 # Load all players for the dropdown
-@st.cache_resource
-def get_player_list():
-    all_players = players.get_players()
-    return {p['full_name']: p['id'] for p in all_players}
-
-player_dict = get_player_list()
+@st.cache_data(show_spinner="Updating active player list...")
+def get_active_players_for_season(year):
+    # Format the season string (e.g., 2022 -> '2022-23')
+    if year <= 1999:
+        season_str = f"{year}-{(year - 1899):02d}"
+    else:
+        season_str = f"{year}-{(year - 1999):02d}"
+    
+    try:
+        from nba_api.stats.endpoints import leagueleaders
+        leaders = leagueleaders.LeagueLeaders(season=season_str).get_data_frames()[0]
+        
+        # Create a dictionary of {Player Name: Player ID}
+        # This ensures only players who played that year appear
+        active_players = dict(zip(leaders['PLAYER'], leaders['PLAYER_ID']))
+        return active_players
+    except Exception as e:
+        st.error(f"Could not fetch players for {season_str}. The NBA API might be rate-limiting.")
+        return {}
 
 # --- HELPER FUNCTIONS (FROM NOTEBOOK) ---
 
@@ -115,10 +128,26 @@ st.markdown("Visualize how a team's shot profile changes when a specific player 
 
 with st.sidebar:
     st.header("Settings")
-    selected_player_name = st.selectbox("Select Player", options=list(player_dict.keys()), index=list(player_dict.keys()).index("LeBron James"))
-    selected_player_id = player_dict[selected_player_name]
     
-    selected_year = st.number_input("Season (Start Year)", min_value=1996, max_value=2023, value=2022)
+    # 1. Pick Season First
+    selected_year = st.number_input("Season (Start Year)", min_value=1996, max_value=2024, value=2023)
+    
+    # 2. Get players active in THAT season
+    active_player_dict = get_active_players_for_season(selected_year)
+    
+    if active_player_dict:
+        player_names = sorted(list(active_player_dict.keys()))
+        
+        # 3. Pick Player from the filtered list
+        # We try to default to LeBron James if he's in the list, otherwise the first player
+        default_index = player_names.index("LeBron James") if "LeBron James" in player_names else 0
+        
+        selected_player_name = st.selectbox("Select Player", options=player_names, index=default_index)
+        selected_player_id = active_player_dict[selected_player_name]
+    else:
+        st.warning("No players found for this season.")
+        st.stop() # Stops the app from running further until a valid season is picked
+
     chart_type = st.radio("Chart Type", ["Scatter Chart", "Hexbin Heatmap", "Player Involvement"])
 
 # Data Loading
