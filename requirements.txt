@@ -7,3 +7,4 @@ Pillow
 scikit-learn
 nba_api
 nba_on_court
+NBAStatsHTTP
