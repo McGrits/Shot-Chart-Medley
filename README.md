@@ -1,8 +1,9 @@
 # On-Off Player Shot Charts
-
 ## Background
 As someone who is a fan and analyzes the game of basketball, something I've always been curious about is to what extent do players affect how their team's play offense. In a way, its a chicken or the egg question. Do coaches gameplan around their rosters or do general managers build their rosters around their coaches gameplan. While obviously different players carry more or less weight in those discussions, it is a fun thought experiment.
-
+## Data
+The data for this project was taken from two APIs. The first was the "nba on court" API which I used to download the play by play and the shot detail data. I was also able to use a function from this package to derive who was on the court during a given play which made this project possible. Second was the NBA_API package, which allowed me to gather the nba player ids, team ids, nba games participated in. These all allowed me to filter the data to individual players.
 ## Methology
-Due to limitations in data, I will be determining team's gameplan/style based on their shot locations. To estimate the effect that a player has on it, I will generate 2 main shot charts. One filtered by the player being on the court and the other with the player off. ![Wemby off court](<Useful files/wemby_off.png>) ![Wemby on court](<Useful files/wemby_on.png>)
+Due to limitations in data, I will be determining team's gameplan/style based on their shot locations. To estimate the effect that a player has on it, I will generate 2 main shot charts. One filtered by the player being on the court and the other with the player off. ![Wemby off court](<Useful files/wemby_off.png>) ![Wemby on court](<Useful files/wemby_on.png>) 
 
+The shot charts are binned by shot location for easier interpretation and they were also placed under a minimum shot filter. This shot filter made it to where the hexes would not appear unless it made up 0.25% of the shots taken. This decision was made to better highlight where the shots were being taken
